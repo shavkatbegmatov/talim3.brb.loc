@@ -61,6 +61,7 @@ $statuses = [
 					<a class="btn btn-outline-blue btn-sm" href="/application/refresh">Обновить таблицу заявок</a>
 					<a class="btn btn-outline-blue btn-sm" href="/application/set_status_4_test">TEST Status 4 1</a>
 					<a class="btn btn-outline-blue btn-sm" href="/application/set_status_4_test_2">TEST Status 4 2</a>
+					<a class="btn btn-outline-blue btn-sm" href="/application/set_status_3">TEST Status 3</a>
 					<?php else: ?>
 					<a class="btn btn-outline-blue btn-sm disabled" href="/application/refresh" disabled>Обновить таблицу заявок</a>
 					<?php endif; ?>

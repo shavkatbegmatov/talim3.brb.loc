@@ -20,6 +20,10 @@ get('/application/set_status_4_test_2', function () {
     render('application/set_status_4_test_2');
 });
 
+get('/application/set_status_3', function () {
+    render('application/set_status_3');
+});
+
 get('/application/oracle', function () {
     render('application/test_conn_oracle_2');//--
 });
