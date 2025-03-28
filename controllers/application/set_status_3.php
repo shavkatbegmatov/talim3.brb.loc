@@ -61,6 +61,7 @@ function getRequestData($operationId)
 // Misol uchun:
 $data = getRequestData(1);
 print_r($data);
+exit;
 
 
 
