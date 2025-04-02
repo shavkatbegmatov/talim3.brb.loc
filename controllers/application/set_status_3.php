@@ -20,11 +20,11 @@ function getRequestData($operationId)
     $studentMfId = $application->student_mf_id;
     $reason      = $application->bxo_status_reason; // ( ) ichida yoziladigan sabab
 
-    // 3. operations.status_code orqali statuses jadvalidan id_mf va name_uz ni topamiz
+    // 3. operations.status_mf orqali statuses jadvalidan id_mf va name_uz ni topamiz
     //    Agar bog‘lanish 'id_brb' bo‘yicha bo‘lsa, 'id_brb = ?' deb yozasiz,
     //    agar 'id_mf' bo‘yicha bo‘lsa, 'id_mf = ?' deb yozasiz.
     //    Masalan, id_brb bo‘yicha:
-    $statusRow = R::findOne('statuses', 'id_brb = ?', [$operation->status_code]);
+    $statusRow = R::findOne('statuses', 'id_brb = ?', [$operation->status]);
     if (!$statusRow) {
         return ["error" => "Statuses jadvalidan mos keluvchi ma'lumot topilmadi"];
     }
@@ -34,8 +34,8 @@ function getRequestData($operationId)
     $idMf         = $statusRow->id_mf;
 
     // 5. comment ni ikki qismda shakllantiramiz: name_uz + " (bxo_status_reason)"
-    //    Agar bxo_status_reason bo‘sh bo‘lsa, shunchaki name_uz qaytarish mumkin
-    if (!empty($reason)) {
+    //    Agar bxo_status_reason bo‘sh bo‘lsa yoki id_mf == 4 bo‘lsa, shunchaki name_uz qaytarish mumkin
+    if (!empty($reason) && $idMf != 4) {
         $comment = $statusNameUz . " (" . $reason . ")";
     } else {
         $comment = $statusNameUz;
@@ -59,9 +59,11 @@ function getRequestData($operationId)
 }
 
 // Misol uchun:
-$data = getRequestData(1);
-print_r($data);
-exit;
+// $data = getRequestData(1);
+// echo "<pre>";
+// print_r(json_encode($data));
+// echo "</pre>";
+// exit;
 
 
 
@@ -142,6 +144,7 @@ if (!isset($authResponseData["accessToken"])) {
 $token = $authResponseData["accessToken"];
 
 // So'rov ma'lumotlari
+/*
 $requestData = [
     "data" => [
         [
@@ -151,6 +154,14 @@ $requestData = [
         ]
     ]
 ];
+*/
+
+$operId = 1;
+
+$requestData = getRequestData($operId); // 1 - operation_id
+if (isset($requestData['error'])) {
+    die($requestData['error']);
+}
 
 // cURL so'rovini sozlash
 $url = 'https://talim-krediti.mf.uz/api/student-application-rest/v2/update-app-status';
@@ -179,9 +190,10 @@ $responseData = json_decode($response, true);
 foreach ($requestData['data'] as $item) {
     $log = R::dispense('log');
     $log->application_id = $item['id'];
-    $log->status_code   = $item['status_code'];
-    $log->request_json  = json_encode($requestData);
-    $log->response_json = json_encode($responseData);
+    $log->operation_id = $operId;
+    $log->status_mf   = $item['status_code'];
+    $log->request_json  = json_encode($requestData, JSON_UNESCAPED_UNICODE);
+    $log->response_json = json_encode($responseData, JSON_UNESCAPED_UNICODE);
     $log->created_at    = date('Y-m-d H:i:s');
     R::store($log);
 }
@@ -206,6 +218,22 @@ if (isset($responseData['data']) && is_array($responseData['data'])) {
 }
 
 echo "Ma'lumotlar saqlandi!";
+
+
+
+// 1. log jadvalidan oxirgi yozuvni olish
+$latestLog = R::findLast('log');
+echo "<h3>Log jadvalidan o'qilgan oxirgi yozuv:</h3>";
+echo "<pre>" . json_encode($latestLog, JSON_UNESCAPED_UNICODE | JSON_PRETTY_PRINT) . "</pre>";
+
+// 2. response4 jadvalidan oxirgi yozuvni olish
+$latestResponse = R::findLast('response4');
+echo "<h3>response4 jadvalidan o'qilgan oxirgi yozuv:</h3>";
+echo "<pre>" . json_encode($latestResponse, JSON_UNESCAPED_UNICODE | JSON_PRETTY_PRINT) . "</pre>";
+
+
+
+exit;
 
 redirect('/application');
 ?>
