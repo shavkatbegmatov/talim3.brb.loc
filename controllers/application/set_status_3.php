@@ -1,55 +1,48 @@
 <?php
-
 ini_set('display_errors', 1);
 ini_set('display_startup_errors', 1);
 error_reporting(E_ALL);
 
+// Функция получения данных для запроса (оставляем без изменений)
 function getRequestData($operationId)
 {
-    // 1. operations jadvalidan kerakli yozuvni topamiz
+    // 1. Ищем нужную запись в таблице operations
     $operation = R::findOne('operations', 'id = ?', [$operationId]);
     if (!$operation) {
-        return ["error" => "Operation topilmadi"];
+        return ["error" => "Operation с ID $operationId не найдена"];
     }
 
-    // 2. operations.dagi application_id orqali applications jadvalidan student_mf_id va bxo_status_reason ni olamiz
+    // 2. Получаем student_mf_id и bxo_status_reason из таблицы applications по application_id
     $application = R::findOne('applications', 'id = ?', [$operation->application_id]);
     if (!$application) {
-        return ["error" => "Application topilmadi"];
+        return ["error" => "Application для операции $operationId не найдена"];
     }
     $studentMfId = $application->student_mf_id;
-    $reason      = $application->bxo_status_reason; // ( ) ichida yoziladigan sabab
+    $reason      = $application->bxo_status_reason;
 
-    // 3. operations.status_mf orqali statuses jadvalidan id_mf va name_uz ni topamiz
-    //    Agar bog‘lanish 'id_brb' bo‘yicha bo‘lsa, 'id_brb = ?' deb yozasiz,
-    //    agar 'id_mf' bo‘yicha bo‘lsa, 'id_mf = ?' deb yozasiz.
-    //    Masalan, id_brb bo‘yicha:
+    // 3. Находим данные в таблице statuses по operations.status_mf
     $statusRow = R::findOne('statuses', 'id_brb = ?', [$operation->status]);
     if (!$statusRow) {
-        return ["error" => "Statuses jadvalidan mos keluvchi ma'lumot topilmadi"];
+        return ["error" => "Статус для операции $operationId не найден"];
     }
 
-    // 4. name_uz va id_mf qiymatlarini olamiz
+    // 4. Извлекаем name_uz и id_mf
     $statusNameUz = $statusRow->name_uz;
     $idMf         = $statusRow->id_mf;
 
-    // 5. comment ni ikki qismda shakllantiramiz: name_uz + " (bxo_status_reason)"
-    //    Agar bxo_status_reason bo‘sh bo‘lsa yoki id_mf == 4 bo‘lsa, shunchaki name_uz qaytarish mumkin
+    // 5. Формируем comment: если reason не пуст и id_mf не равен 4, добавляем его в скобках
     if (!empty($reason) && $idMf != 4) {
         $comment = $statusNameUz . " (" . $reason . ")";
     } else {
         $comment = $statusNameUz;
     }
 
-    // 6. Yakuniy massivni qaytarish
+    // 6. Формируем итоговый массив
     $requestData = [
         "data" => [
             [
-                // 'id' sifatida student_mf_id beriladi
                 "id"          => $studentMfId,
-                // status_code -> statuses jadvalidagi id_mf
                 "status_code" => $idMf,
-                // comment -> "name_uz (bxo_status_reason)"
                 "comment"     => $comment
             ]
         ]
@@ -58,24 +51,14 @@ function getRequestData($operationId)
     return $requestData;
 }
 
-// Misol uchun:
-// $data = getRequestData(1);
-// echo "<pre>";
-// print_r(json_encode($data));
-// echo "</pre>";
-// exit;
-
-
-
-// Function to perform cURL requests
+// Функция для выполнения cURL-запросов (без изменений)
 function performCurlRequest($url, $method = 'GET', $data = null, $headers = [])
 {
     $ch = curl_init();
 
     curl_setopt($ch, CURLOPT_URL, $url);
-    curl_setopt($ch, CURLOPT_RETURNTRANSFER, true); // Return response as string
+    curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
 
-    // Set request method
     switch (strtoupper($method)) {
         case 'POST':
             curl_setopt($ch, CURLOPT_POST, true);
@@ -94,40 +77,34 @@ function performCurlRequest($url, $method = 'GET', $data = null, $headers = [])
             break;
     }
 
-    // Set headers if provided
     if (!empty($headers)) {
         curl_setopt($ch, CURLOPT_HTTPHEADER, $headers);
     }
 
-    // Disable SSL certificate verification (not recommended for production)
     curl_setopt($ch, CURLOPT_SSL_VERIFYHOST, false);
     curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, false);
 
-    // Execute request
     $response = curl_exec($ch);
 
-    // Check for errors
     if ($response === false) {
         $error = curl_error($ch);
         curl_close($ch);
         return ['status' => 'failed', 'error' => "cURL Error: $error"];
     }
 
-    // Get HTTP status code
     $httpStatus = curl_getinfo($ch, CURLINFO_HTTP_CODE);
     curl_close($ch);
 
     return ['status' => $httpStatus, 'response' => $response];
 }
 
-// 1st Step: Authentication and Token Retrieval
+// Аутентификация и получение токена (однократно, ведь токен – наше всё)
 $authUrl = "https://talim-krediti.mf.uz/api/auth/signin";
 $authData = [
     "username" => "01037",
-    "password" => "\$DFg\$hBjK@mU72qOv" // Escaped special characters
+    "password" => "\$DFg\$hBjK@mU72qOv"
 ];
 
-// Perform authentication request
 $authResponse = performCurlRequest(
     $authUrl,
     'POST',
@@ -135,103 +112,90 @@ $authResponse = performCurlRequest(
     ["Content-Type: application/json"]
 );
 
-// Decode authentication response
 $authResponseData = json_decode($authResponse['response'], true);
 if (!isset($authResponseData["accessToken"])) {
-    die("Authentication failed. Token not received.");
+    die("Аутентификация не удалась. Токен не получен.");
 }
 
 $token = $authResponseData["accessToken"];
 
-// So'rov ma'lumotlari
-/*
-$requestData = [
-    "data" => [
-        [
-            "id" => 201292,
-            "status_code" => 4,
-            "comment" => "Qabul qilindi"
-        ]
-    ]
-];
-*/
+// Задайте диапазон операционных ID, который вам необходим
+$startOperId = 101; // Начало диапазона
+$endOperId   = 1000; // Конец диапазона
 
-$operId = 1;
+// Цикл по диапазону operId
+for ($operId = $startOperId; $operId <= $endOperId; $operId++) {
+    echo "Обработка операции с ID: $operId<br>";
 
-$requestData = getRequestData($operId); // 1 - operation_id
-if (isset($requestData['error'])) {
-    die($requestData['error']);
-}
-
-// cURL so'rovini sozlash
-$url = 'https://talim-krediti.mf.uz/api/student-application-rest/v2/update-app-status';
-$ch = curl_init($url);
-curl_setopt($ch, CURLOPT_POST, 1);
-curl_setopt($ch, CURLOPT_POSTFIELDS, json_encode($requestData));
-curl_setopt($ch, CURLOPT_HTTPHEADER, [
-    "Authorization: Bearer $token",
-    'Content-Type: application/json',
-    'Content-Length: ' . strlen(json_encode($requestData))
-]);
-curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
-curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, false); // SSL tekshiruvini o'chirish
-
-// So'rovni yuborish va javobni olish
-$response = curl_exec($ch);
-if(curl_errno($ch)) {
-    die('cURL xatosi: ' . curl_error($ch));
-}
-curl_close($ch);
-
-// Javobni JSON dan massivga aylantirish
-$responseData = json_decode($response, true);
-
-// Log jadvaliga yozish
-foreach ($requestData['data'] as $item) {
-    $log = R::dispense('log');
-    $log->application_id = $item['id'];
-    $log->operation_id = $operId;
-    $log->status_mf   = $item['status_code'];
-    $log->request_json  = json_encode($requestData, JSON_UNESCAPED_UNICODE);
-    $log->response_json = json_encode($responseData, JSON_UNESCAPED_UNICODE);
-    $log->created_at    = date('Y-m-d H:i:s');
-    R::store($log);
-}
-
-// Accept_app_response jadvaliga yozish
-if (isset($responseData['data']) && is_array($responseData['data'])) {
-    foreach ($responseData['data'] as $dataItem) {
-        $appResponse = R::dispense('response4');
-
-        // Asosiy maydonlar
-        $appResponse->agreement  = $dataItem['agreement'] ? 1 : 0;
-        $appResponse->comment    = $dataItem['comment'];
-        $appResponse->entry_date = date('Y-m-d H:i:s', strtotime($dataItem['entry_date']));
-        
-        // JSON maydonlar
-        $appResponse->education_info = json_encode($dataItem['education_info']);
-        $appResponse->personal_data  = json_encode($dataItem['personal_data']);
-        $appResponse->credit_details = json_encode($dataItem['credit_details']);
-        
-        R::store($appResponse);
+    $requestData = getRequestData($operId);
+    if (isset($requestData['error'])) {
+        echo "Ошибка для операции $operId: " . $requestData['error'] . "<br>";
+        continue; // Переходим к следующему ID
     }
+
+    // Выполняем cURL-запрос для обновления статуса
+    $url = 'https://talim-krediti.mf.uz/api/student-application-rest/v2/update-app-status';
+    $ch = curl_init($url);
+    curl_setopt($ch, CURLOPT_POST, 1);
+    curl_setopt($ch, CURLOPT_POSTFIELDS, json_encode($requestData));
+    curl_setopt($ch, CURLOPT_HTTPHEADER, [
+        "Authorization: Bearer $token",
+        'Content-Type: application/json',
+        'Content-Length: ' . strlen(json_encode($requestData))
+    ]);
+    curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+    curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, false);
+
+    $response = curl_exec($ch);
+    if (curl_errno($ch)) {
+        echo 'cURL ошибка для операции ' . $operId . ': ' . curl_error($ch) . "<br>";
+        curl_close($ch);
+        continue;
+    }
+    curl_close($ch);
+
+    $responseData = json_decode($response, true);
+
+    // Запись в лог
+    foreach ($requestData['data'] as $item) {
+        $log = R::dispense('log');
+        $log->application_id = $item['id'];
+        $log->operation_id = $operId;
+        $log->status_mf   = $item['status_code'];
+        $log->request_json  = json_encode($requestData, JSON_UNESCAPED_UNICODE);
+        $log->response_json = json_encode($responseData, JSON_UNESCAPED_UNICODE);
+        $log->created_at    = date('Y-m-d H:i:s');
+        R::store($log);
+    }
+
+    // Запись в таблицу response4
+    if (isset($responseData['data']) && is_array($responseData['data'])) {
+        foreach ($responseData['data'] as $dataItem) {
+            $appResponse = R::dispense('response4');
+            $appResponse->agreement  = $dataItem['agreement'] ? 1 : 0;
+            $appResponse->comment    = $dataItem['comment'];
+            $appResponse->entry_date = date('Y-m-d H:i:s', strtotime($dataItem['entry_date']));
+            $appResponse->education_info = json_encode($dataItem['education_info']);
+            $appResponse->personal_data  = json_encode($dataItem['personal_data']);
+            $appResponse->credit_details = json_encode($dataItem['credit_details']);
+            R::store($appResponse);
+        }
+    }
+
+    echo "Операция $operId успешно обработана!<br><br>";
 }
 
-echo "Ma'lumotlar saqlandi!";
+echo "Все операции обработаны!<br>";
 
-
-
-// 1. log jadvalidan oxirgi yozuvni olish
+// Вывод последней записи из таблицы log
 $latestLog = R::findLast('log');
-echo "<h3>Log jadvalidan o'qilgan oxirgi yozuv:</h3>";
+echo "<h3>Последняя запись из таблицы log:</h3>";
 echo "<pre>" . json_encode($latestLog, JSON_UNESCAPED_UNICODE | JSON_PRETTY_PRINT) . "</pre>";
 
-// 2. response4 jadvalidan oxirgi yozuvni olish
+// Вывод последней записи из таблицы response4
 $latestResponse = R::findLast('response4');
-echo "<h3>response4 jadvalidan o'qilgan oxirgi yozuv:</h3>";
+echo "<h3>Последняя запись из таблицы response4:</h3>";
 echo "<pre>" . json_encode($latestResponse, JSON_UNESCAPED_UNICODE | JSON_PRETTY_PRINT) . "</pre>";
-
-
 
 exit;
 
