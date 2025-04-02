@@ -123,8 +123,8 @@ if (!isset($authResponseData["accessToken"])) {
 $token = $authResponseData["accessToken"];
 
 // Задайте диапазон операционных ID, который вам необходим
-$startOperId = 453; // Начало диапазона
-$endOperId   = 2000; // Конец диапазона
+$startOperId = 6001; // Начало диапазона
+$endOperId   = 6115; // Конец диапазона
 
 // Цикл по диапазону operId
 for ($operId = $startOperId; $operId <= $endOperId; $operId++) {
