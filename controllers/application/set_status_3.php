@@ -155,6 +155,9 @@ for ($operId = $startOperId; $operId <= $endOperId; $operId++) {
         curl_close($ch);
         continue;
     }
+    
+    // Получаем HTTP статус ответа до закрытия дескриптора
+    $responseStatus = curl_getinfo($ch, CURLINFO_HTTP_CODE);
     curl_close($ch);
 
     $responseData = json_decode($response, true);
@@ -167,6 +170,8 @@ for ($operId = $startOperId; $operId <= $endOperId; $operId++) {
         $log->status_mf   = $item['status_code'];
         $log->request_json  = json_encode($requestData, JSON_UNESCAPED_UNICODE);
         $log->response_json = json_encode($responseData, JSON_UNESCAPED_UNICODE);
+        // Записываем HTTP статус ответа
+        $log->response_status = $responseStatus;
         $log->created_at    = date('Y-m-d H:i:s');
         R::store($log);
     }
